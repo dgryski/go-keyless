@@ -26,7 +26,7 @@ const (
 	TagClientIP     = 0x03 // Client IP (4 bytes for IPv4, 16 for IPv6)
 	TagOPCODE       = 0x11 // Requested operation (one of KSSL_OP_*)
 	TagPayload      = 0x12 // Payload
-	TagPaddding     = 0x20 // Padding
+	TagPadding      = 0x20 // Padding
 )
 
 // This structure stores the value of a given tag
