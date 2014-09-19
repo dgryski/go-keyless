@@ -37,7 +37,7 @@ func main() {
 		log.Fatalln("failed to load CAs")
 	}
 
-	config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: roots}
+	config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: roots, InsecureSkipVerify: true}
 	remote := *server + ":" + strconv.Itoa(*port)
 	log.Printf("remote %+v\n", remote)
 	conn, err := tls.Dial("tcp", remote, &config)
