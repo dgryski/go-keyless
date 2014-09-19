@@ -11,8 +11,9 @@ keyless$ make run PORT=2047
 
 Run the test client. You'll need to point it at the test certificates that come
 with keyless. At the moment, it just tries to send a ping and dump the
-response.  However, it's tls.Dial() is failing with EOF.  TLS config stuff is
-probably broken.
+response.  TLS handshake fails because keyless only supports
+ECDHE-ECDSA-AES256-GCM-SHA384 and ECDHE-RSA-AES256-GCM-SHA384, neither of which
+are supported by crypto/tls.
 
 testclient$ go run main.go -server=localhost -port=2047 \
     -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem  \
