@@ -11,8 +11,12 @@ keyless$ make run PORT=2407
 
 Run the test client. You'll need to point it at the test certificates that come
 with keyless. At the moment, it just tries to send a ping and dump the
-response.  However, it's tls.Dial() is failing with EOF.  Not sure why.
+response.  However, it's tls.Dial() is failing with EOF.  TLS config stuff is
+probably broken.
 
-testclient$ go run main.go -server=localhost -port=2047 -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem -client-key=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client-key.pem --ca-file=$KEYLESS/testing/CAs/testca-keyserver.pem  
+testclient$ go run main.go -server=localhost -port=2047 \
+    -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem  \
+    -client-key=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client-key.pem \
+    -ca-file=$KEYLESS/testing/CAs/testca-keyserver.pem
 
 I'm not a fan of the current API, but it matches with the C one kind-of.
