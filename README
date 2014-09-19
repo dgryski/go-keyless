@@ -7,7 +7,7 @@ To play with:
 
 Download and build keyless.  Start the keyless demo server
 
-keyless$ make run PORT=2407
+keyless$ make run PORT=2047
 
 Run the test client. You'll need to point it at the test certificates that come
 with keyless. At the moment, it just tries to send a ping and dump the
