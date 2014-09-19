@@ -5,15 +5,20 @@ My goal at the moment is just to implement the functionality required for
 
 To play with:
 
-Download and build keyless.  Start the keyless demo server
+Download and build keyless.  Currently, Go can't talk to a keyless server
+because crypto/tls doesn't support ECDHE-ECDSA-AES256-GCM-SHA384 and
+ECDHE-RSA-AES256-GCM-SHA384, the only two ciphers keyless accepts.  If you want
+to play, you need to patch your local keyless to include support for more
+ciphers.  The easiest two to change to are ECDHE-ECDSA-AES128-GCM-SHA256 and
+ECDHE-RSA-AES128-GCM-SHA256.  (256 -> 128, 384 -> 256).
+
+Start the keyless demo server
 
 keyless$ make run PORT=2047
 
 Run the test client. You'll need to point it at the test certificates that come
 with keyless. At the moment, it just tries to send a ping and dump the
-response.  TLS handshake fails because keyless only supports
-ECDHE-ECDSA-AES256-GCM-SHA384 and ECDHE-RSA-AES256-GCM-SHA384, neither of which
-are supported by crypto/tls.
+response.
 
 testclient$ go run main.go -server=localhost -port=2047 \
     -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem  \
