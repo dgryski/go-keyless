@@ -1,0 +1,18 @@
+go-keyless: a client for https://github.com/cloudflare/keyless
+
+My goal at the moment is just to implement the functionality required for
+'testclient' to run.  Injecting into crypto/tls is a larger, different project.
+
+To play with:
+
+Download and build keyless.  Start the keyless demo server
+
+keyless$ make run PORT=2407
+
+Run the test client. You'll need to point it at the test certificates that come
+with keyless. At the moment, it just tries to send a ping and dump the
+response.  However, it's tls.Dial() is failing with EOF.  Not sure why.
+
+testclient$ go run main.go -server=localhost -port=2047 -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem -client-key=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client-key.pem --ca-file=$KEYLESS/testing/CAs/testca-keyserver.pem  
+
+I'm not a fan of the current API, but it matches with the C one kind-of.
