@@ -86,14 +86,15 @@ func Marshal(h Header) ([]byte, error) {
 
 	b = append(b, h.VersionMaj, h.VersionMin)
 	// TODO(dgryski): backpatch real length later
-	b = append16(b, 0)
+	b = append16(b, padTo-headerSize)
 	b = append32(b, h.ID)
 
 	for _, item := range h.Items {
 		b = appendItem(b, item)
 	}
 
-	// pad response to padTo length
+	// pad response to padTo length.. wow, this is ugly
+	b = appendItem(b, Item{Tag: TagPadding, Data: make([]byte, padTo-len(b)-3)})
 
 	return b, nil
 }
