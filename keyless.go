@@ -98,8 +98,8 @@ func Marshal(h Header) ([]byte, error) {
 		b = appendItem(b, item)
 	}
 
-	// pad response to padTo length.. wow, this is ugly
-	b = appendItem(b, Item{Tag: TagPadding, Data: make([]byte, padTo-len(b)-3)})
+	// pad response to at least padTo length
+	b = appendItem(b, Item{Tag: TagPadding, Data: make([]byte, padTo-len(b))})
 
 	return b, nil
 }
