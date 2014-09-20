@@ -59,11 +59,11 @@ const (
 
 	// Sign data using RSA
 	OpRSASignMD5SHA1 = 0x02
-	OPRSASignSHA1    = 0x03
-	OPRSASignSHA224  = 0x04
-	OPRSASignSHA256  = 0x05
-	OPRSASignSHA384  = 0x06
-	OPRSASignSHA512  = 0x07
+	OpRSASignSHA1    = 0x03
+	OpRSASignSHA224  = 0x04
+	OpRSASignSHA256  = 0x05
+	OpRSASignSHA384  = 0x06
+	OpRSASignSHA512  = 0x07
 
 	// Used to send a block of data back to the client (in response, for
 	// example, to a KSSL_OP_RSA_DECRYPT)
