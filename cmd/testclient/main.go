@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/binary"
 	"flag"
 	"github.com/dgryski/go-keyless"
 	"io/ioutil"
@@ -61,9 +62,16 @@ func main() {
 		log.Fatalf("write: %#vv\n", err)
 	}
 
-	var response [1024]byte
+	var header [8]byte
 
-	conn.Read(response[:])
+	conn.Read(header[:])
+
+	rlen := binary.BigEndian.Uint16(header[2:])
+
+	response := make([]byte, (rlen + 8))
+	copy(response, header[:])
+
+	conn.Read(response[8:])
 
 	var r keyless.Header
 	keyless.Unmarshal(response[:], &r)

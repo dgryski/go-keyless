@@ -2,7 +2,7 @@ package keyless
 
 import (
 	"encoding/binary"
-	"log"
+	"errors"
 )
 
 // From kssl.h
@@ -113,9 +113,9 @@ func Unmarshal(b []byte, h *Header) error {
 
 	length := binary.BigEndian.Uint16(b[:])
 	b = b[2:]
-	if false {
-		// FIXME(dgryski): verify provided length and len(b) match up
-		log.Printf("length %d, blen %d\n", length, blen)
+
+	if int(length)+headerSize != blen {
+		return errors.New("short packet")
 	}
 
 	h.ID = binary.BigEndian.Uint32(b[:])
@@ -158,11 +158,6 @@ func readItem(b []byte, item *Item) ([]byte, error) {
 
 	l := binary.BigEndian.Uint16(b[:])
 	b = b[2:]
-
-	if item.Tag == TagPadding {
-		// Bug in kssl_helpers.c:flatten_operation() ?
-		l -= 3
-	}
 
 	item.Data, b = b[:l], b[l:]
 
