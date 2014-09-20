@@ -17,12 +17,15 @@ Start the keyless demo server
 keyless$ make run PORT=2047
 
 Run the test client. You'll need to point it at the test certificates that come
-with keyless. At the moment, it just tries to send a ping and dump the
-response.
+with keyless.  It runs some Pings(), a Decrypt(), and a Sign().
 
 testclient$ go run main.go -server=localhost -port=2047 \
     -client-cert=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client.pem  \
     -client-key=$KEYLESS/testing/client-cert/ecdsa/ecdsa-client-key.pem \
-    -ca-file=$KEYLESS/testing/CAs/testca-keyserver.pem
+    -ca-file=$KEYLESS/testing/CAs/testca-keyserver.pem \
+    -private-key=$KEYLESS/testing/keys/private.key
 
-I'm not a fan of the current API, but it matches with the C one kind-of.
+TODO:
+    - The client does not ship the SNI or the client IP address.
+    - The return values from API calls needs to be figured out
+    - The client does not currently support piplined requests.
