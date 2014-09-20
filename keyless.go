@@ -1,8 +1,11 @@
 package keyless
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
+	"net"
+	"sync"
 )
 
 // From kssl.h
@@ -84,6 +87,71 @@ const (
 	ErrFormat                   = 0x07
 	ErrInternal                 = 0x08
 )
+
+type Conn struct {
+	mu   sync.Mutex
+	conn net.Conn
+
+	id uint32
+}
+
+func Dial(remote string, config *tls.Config) (*Conn, error) {
+
+	var c Conn
+
+	var err error
+	c.conn, err = tls.Dial("tcp", remote, config)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}
+
+func (c *Conn) Ping(payload []byte) ([]Item, error) {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var p Packet
+
+	p.VersionMaj = VersionMaj
+	p.ID = c.id
+	c.id++
+
+	p.Items = []Item{
+		{Tag: TagOPCODE, Data: []byte{OpPing}},
+		{Tag: TagPayload, Data: payload},
+	}
+
+	b, _ := Marshal(p)
+
+	_, err := c.conn.Write(b)
+	if err != nil {
+		return nil, err
+	}
+
+	var header [8]byte
+
+	c.conn.Read(header[:])
+
+	rlen := binary.BigEndian.Uint16(header[2:])
+
+	response := make([]byte, (rlen + 8))
+	copy(response, header[:])
+
+	c.conn.Read(response[8:])
+
+	var r Packet
+	Unmarshal(response[:], &r)
+
+	if r.ID != p.ID {
+		return nil, errors.New("out of sequence response")
+	}
+
+	return r.Items, nil
+}
 
 func Marshal(p Packet) ([]byte, error) {
 

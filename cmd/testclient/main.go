@@ -3,8 +3,8 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/binary"
 	"flag"
+	"fmt"
 	"github.com/dgryski/go-keyless"
 	"io/ioutil"
 	"log"
@@ -40,41 +40,15 @@ func main() {
 	config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: roots, InsecureSkipVerify: true}
 	remote := *server + ":" + strconv.Itoa(*port)
 	log.Printf("remote %+v\n", remote)
-	conn, err := tls.Dial("tcp", remote, &config)
+	conn, err := keyless.Dial(remote, &config)
 
 	if err != nil {
 		log.Fatalf("dial error: %s", err)
 	}
 
-	var p keyless.Packet
-
-	p.VersionMaj = keyless.VersionMaj
-	p.ID = 0x12345678
-	p.Items = []keyless.Item{
-		{Tag: keyless.TagOPCODE, Data: []byte{keyless.OpPing}},
-		{Tag: keyless.TagPayload, Data: []byte("hello, world")},
+	for i := 0; i < 10; i++ {
+		items, err := conn.Ping([]byte("hello, world"))
+		fmt.Println(items, err)
 	}
 
-	b, _ := keyless.Marshal(p)
-
-	_, err = conn.Write(b)
-	if err != nil {
-		log.Fatalf("write: %#vv\n", err)
-	}
-
-	var header [8]byte
-
-	conn.Read(header[:])
-
-	rlen := binary.BigEndian.Uint16(header[2:])
-
-	response := make([]byte, (rlen + 8))
-	copy(response, header[:])
-
-	conn.Read(response[8:])
-
-	var r keyless.Packet
-	keyless.Unmarshal(response[:], &r)
-
-	log.Printf("response\n%#v", r)
 }
