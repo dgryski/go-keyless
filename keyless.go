@@ -111,19 +111,26 @@ func Dial(remote string, config *tls.Config) (*Conn, error) {
 
 func (c *Conn) Ping(payload []byte) ([]Item, error) {
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	var p Packet
-
-	p.VersionMaj = VersionMaj
-	p.ID = c.id
-	c.id++
-
-	p.Items = []Item{
+	items := []Item{
 		{Tag: TagOPCODE, Data: []byte{OpPing}},
 		{Tag: TagPayload, Data: payload},
 	}
+
+	return c.doRequest(items)
+
+}
+
+func (c *Conn) doRequest(items []Item) ([]Item, error) {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	p := Packet{
+		VersionMaj: VersionMaj,
+		ID:         c.id,
+		Items:      items,
+	}
+	c.id++
 
 	b, _ := Marshal(p)
 
