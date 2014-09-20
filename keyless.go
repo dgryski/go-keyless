@@ -90,8 +90,7 @@ func Marshal(h Header) ([]byte, error) {
 	var b []byte
 
 	b = append(b, h.VersionMaj, h.VersionMin)
-	// TODO(dgryski): backpatch real length later
-	b = append16(b, padTo-headerSize)
+	b = append16(b, 0)
 	b = append32(b, h.ID)
 
 	for _, item := range h.Items {
@@ -100,6 +99,8 @@ func Marshal(h Header) ([]byte, error) {
 
 	// pad response to at least padTo length
 	b = appendItem(b, Item{Tag: TagPadding, Data: make([]byte, padTo-len(b))})
+
+	binary.BigEndian.PutUint16(b[2:], uint16(len(b)-headerSize))
 
 	return b, nil
 }
