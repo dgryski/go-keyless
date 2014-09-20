@@ -46,16 +46,16 @@ func main() {
 		log.Fatalf("dial error: %s", err)
 	}
 
-	var h keyless.Header
+	var p keyless.Packet
 
-	h.VersionMaj = keyless.VersionMaj
-	h.ID = 0x12345678
-	h.Items = []keyless.Item{
+	p.VersionMaj = keyless.VersionMaj
+	p.ID = 0x12345678
+	p.Items = []keyless.Item{
 		{Tag: keyless.TagOPCODE, Data: []byte{keyless.OpPing}},
 		{Tag: keyless.TagPayload, Data: []byte("hello, world")},
 	}
 
-	b, _ := keyless.Marshal(h)
+	b, _ := keyless.Marshal(p)
 
 	_, err = conn.Write(b)
 	if err != nil {
@@ -73,7 +73,7 @@ func main() {
 
 	conn.Read(response[8:])
 
-	var r keyless.Header
+	var r keyless.Packet
 	keyless.Unmarshal(response[:], &r)
 
 	log.Printf("response\n%#v", r)

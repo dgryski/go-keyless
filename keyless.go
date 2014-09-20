@@ -7,7 +7,7 @@ import (
 
 // From kssl.h
 
-type Header struct {
+type Packet struct {
 	VersionMaj byte
 	VersionMin byte
 	ID         uint32
@@ -85,15 +85,15 @@ const (
 	ErrInternal                 = 0x08
 )
 
-func Marshal(h Header) ([]byte, error) {
+func Marshal(p Packet) ([]byte, error) {
 
 	var b []byte
 
-	b = append(b, h.VersionMaj, h.VersionMin)
+	b = append(b, p.VersionMaj, p.VersionMin)
 	b = append16(b, 0)
-	b = append32(b, h.ID)
+	b = append32(b, p.ID)
 
-	for _, item := range h.Items {
+	for _, item := range p.Items {
 		b = appendItem(b, item)
 	}
 
@@ -109,11 +109,11 @@ func Marshal(h Header) ([]byte, error) {
 	return b, nil
 }
 
-func Unmarshal(b []byte, h *Header) error {
+func Unmarshal(b []byte, p *Packet) error {
 
 	blen := len(b)
 
-	h.VersionMaj, h.VersionMin = b[0], b[1]
+	p.VersionMaj, p.VersionMin = b[0], b[1]
 	b = b[2:]
 
 	length := binary.BigEndian.Uint16(b[:])
@@ -123,7 +123,7 @@ func Unmarshal(b []byte, h *Header) error {
 		return errors.New("short packet")
 	}
 
-	h.ID = binary.BigEndian.Uint32(b[:])
+	p.ID = binary.BigEndian.Uint32(b[:])
 	b = b[4:]
 
 	for len(b) > 0 {
@@ -133,7 +133,7 @@ func Unmarshal(b []byte, h *Header) error {
 		if err != nil {
 			return err
 		}
-		h.Items = append(h.Items, item)
+		p.Items = append(p.Items, item)
 	}
 
 	return nil
