@@ -98,7 +98,11 @@ func Marshal(h Header) ([]byte, error) {
 	}
 
 	// pad response to at least padTo length
-	b = appendItem(b, Item{Tag: TagPadding, Data: make([]byte, padTo-len(b))})
+	var padding []byte
+	if len(b) < padTo {
+		padding = make([]byte, padTo-len(b))
+	}
+	b = appendItem(b, Item{Tag: TagPadding, Data: padding})
 
 	binary.BigEndian.PutUint16(b[2:], uint16(len(b)-headerSize))
 
