@@ -1,8 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"github.com/dgryski/go-keyless"
@@ -18,6 +24,7 @@ func main() {
 	clientKey := flag.String("client-key", "", "client key")
 	caFile := flag.String("ca-file", "", "ca file")
 	server := flag.String("server", "", "server")
+	privateKey := flag.String("private-key", "", "server's private key")
 
 	flag.Parse()
 
@@ -51,4 +58,38 @@ func main() {
 		fmt.Println(items, err)
 	}
 
+	pkeyData, err := ioutil.ReadFile(*privateKey)
+	if err != nil {
+		log.Fatal("unable to load private key:", err)
+	}
+	block, _ := pem.Decode(pkeyData)
+
+	pkey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		log.Fatalln("unable to parse private key", err)
+	}
+
+	out, err := rsa.EncryptPKCS1v15(rand.Reader, &pkey.PublicKey, []byte("hello, world"))
+	if err != nil {
+		log.Fatalln("unable to encrypt:", err)
+	}
+
+	digest := keyless.DigestPublicModulus(&pkey.PublicKey)
+
+	items, err := conn.Decrypt(digest[:], out)
+
+	fmt.Printf("string(items[1].Data) %+v\n", string(items[1].Data))
+
+	hashed := sha256.Sum256([]byte("hello, world"))
+
+	sig, err := rsa.SignPKCS1v15(rand.Reader, pkey, crypto.SHA256, hashed[:])
+	if err != nil {
+		log.Fatalln("unable to encrypt:", err)
+	}
+
+	items, err = conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+
+	if !bytes.Equal(sig, items[1].Data) {
+		log.Fatalln("signature mismatch")
+	}
 }

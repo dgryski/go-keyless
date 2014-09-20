@@ -1,8 +1,11 @@
 package keyless
 
 import (
+	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"net"
 	"sync"
@@ -120,6 +123,28 @@ func (c *Conn) Ping(payload []byte) ([]Item, error) {
 
 }
 
+func (c *Conn) Decrypt(digest, payload []byte) ([]Item, error) {
+
+	items := []Item{
+		{Tag: TagOPCODE, Data: []byte{OpRSADecrypt}},
+		{Tag: TagPayload, Data: payload},
+		{Tag: TagDigest, Data: digest},
+	}
+
+	return c.doRequest(items)
+}
+
+func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]Item, error) {
+
+	items := []Item{
+		{Tag: TagOPCODE, Data: []byte{op}},
+		{Tag: TagPayload, Data: payload},
+		{Tag: TagDigest, Data: digest},
+	}
+
+	return c.doRequest(items)
+}
+
 func (c *Conn) doRequest(items []Item) ([]Item, error) {
 
 	c.mu.Lock()
@@ -158,6 +183,19 @@ func (c *Conn) doRequest(items []Item) ([]Item, error) {
 	}
 
 	return r.Items, nil
+}
+
+func DigestPublicModulus(pub *rsa.PublicKey) [32]byte {
+	dst := make([]byte, hex.EncodedLen(len(pub.N.Bytes())))
+	hex.Encode(dst, pub.N.Bytes())
+	// need the digest in uppercase
+	for i, c := range dst {
+		if c >= 'a' /* && c <= 'f' */ {
+			dst[i] = c - 'a' + 'A'
+		}
+	}
+	sum := sha256.Sum256(dst)
+	return sum
 }
 
 func Marshal(p Packet) ([]byte, error) {
