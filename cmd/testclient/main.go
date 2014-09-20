@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"flag"
 	"github.com/dgryski/go-keyless"
 	"io/ioutil"
@@ -52,12 +51,10 @@ func main() {
 	h.ID = 0x12345678
 	h.Items = []keyless.Item{
 		{Tag: keyless.TagOPCODE, Data: []byte{keyless.OpPing}},
-		{Tag: keyless.TagPayload, Data: nil},
+		{Tag: keyless.TagPayload, Data: []byte("hello, world")},
 	}
 
 	b, _ := keyless.Marshal(h)
-
-	log.Printf("b\n%s", hex.Dump(b))
 
 	_, err = conn.Write(b)
 	if err != nil {
@@ -68,5 +65,8 @@ func main() {
 
 	conn.Read(response[:])
 
-	log.Printf("response\n%s", hex.Dump(response[:]))
+	var r keyless.Header
+	keyless.Unmarshal(response[:], &r)
+
+	log.Printf("response\n%#v", r)
 }

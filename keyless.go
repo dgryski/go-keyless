@@ -1,5 +1,10 @@
 package keyless
 
+import (
+	"encoding/binary"
+	"log"
+)
+
 // From kssl.h
 
 type Header struct {
@@ -99,6 +104,36 @@ func Marshal(h Header) ([]byte, error) {
 	return b, nil
 }
 
+func Unmarshal(b []byte, h *Header) error {
+
+	blen := len(b)
+
+	h.VersionMaj, h.VersionMin = b[0], b[1]
+	b = b[2:]
+
+	length := binary.BigEndian.Uint16(b[:])
+	b = b[2:]
+	if false {
+		// FIXME(dgryski): verify provided length and len(b) match up
+		log.Printf("length %d, blen %d\n", length, blen)
+	}
+
+	h.ID = binary.BigEndian.Uint32(b[:])
+	b = b[4:]
+
+	for len(b) > 0 {
+		var item Item
+		var err error
+		b, err = readItem(b, &item)
+		if err != nil {
+			return err
+		}
+		h.Items = append(h.Items, item)
+	}
+
+	return nil
+}
+
 func append16(b []byte, v uint16) []byte {
 	return append(b, byte(v>>8), byte(v))
 }
@@ -114,4 +149,22 @@ func appendItem(b []byte, item Item) []byte {
 	b = append(b, item.Data...)
 
 	return b
+}
+
+func readItem(b []byte, item *Item) ([]byte, error) {
+
+	item.Tag = Tag(b[0])
+	b = b[1:]
+
+	l := binary.BigEndian.Uint16(b[:])
+	b = b[2:]
+
+	if item.Tag == TagPadding {
+		// Bug in kssl_helpers.c:flatten_operation() ?
+		l -= 3
+	}
+
+	item.Data, b = b[:l], b[l:]
+
+	return b, nil
 }
