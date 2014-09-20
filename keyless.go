@@ -182,6 +182,10 @@ func (c *Conn) doRequest(items []Item) ([]Item, error) {
 		return nil, errors.New("out of sequence response")
 	}
 
+	if len(r.Items) > 0 && r.Items[len(r.Items)-1].Tag == TagPadding {
+		return r.Items[:len(r.Items)-1], nil
+	}
+
 	return r.Items, nil
 }
 
