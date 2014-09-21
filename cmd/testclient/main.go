@@ -87,10 +87,13 @@ func main() {
 		log.Fatalln("unable to encrypt:", err)
 	}
 
-	digest[0]++
-
 	remotesig, err := conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
 	fmt.Println("signature match", bytes.Equal(sig, remotesig), "err=", err)
+
+	digest[0]++
+
+	remotesig, err = conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+	fmt.Println("expect failure: notfound err=", err)
 
 	// test pipelining
 	start := make(chan bool)
