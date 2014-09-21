@@ -97,26 +97,26 @@ func (e ErrCode) Error() string {
 
 	switch e {
 	case 0x00:
-		return "ErrNone"
+		return "success"
 	case 0x01:
-		return "ErrCryptoFailed"
+		return "cryptography failure"
 	case 0x02:
-		return "ErrKeyNotFound"
+		return "key not found"
 	case 0x03:
-		return "ErrRead"
+		return "read error"
 	case 0x04:
-		return "ErrVersionMismatch"
+		return "version mismatch"
 	case 0x05:
-		return "ErrBadOpcode"
+		return "bad opcode"
 	case 0x06:
-		return "ErrUnexpectedOpcode"
+		return "unexpected opcode"
 	case 0x07:
-		return "ErrFormat"
+		return "format error"
 	case 0x08:
-		return "ErrInternal"
+		return "internal error"
 	}
 
-	return "ErrUnknown"
+	return "unknown"
 }
 
 type Conn struct {
