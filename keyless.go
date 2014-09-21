@@ -7,8 +7,10 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 )
 
 // From kssl.h
@@ -92,8 +94,15 @@ const (
 )
 
 type Conn struct {
-	mu   sync.Mutex
 	conn net.Conn
+
+	mu      sync.Mutex
+	pending map[uint32]chan []byte
+
+	write chan []byte
+	read  chan []byte
+
+	done chan bool
 
 	id uint32
 }
@@ -109,7 +118,73 @@ func Dial(remote string, config *tls.Config) (*Conn, error) {
 		return nil, err
 	}
 
+	c.done = make(chan bool)
+	c.pending = make(map[uint32]chan []byte)
+	c.read = make(chan []byte)
+	c.write = make(chan []byte)
+
+	go c.reader()
+	go c.writer()
+
 	return &c, nil
+}
+
+func (c *Conn) Close() {
+	// FIXME(dgryski): we need to handle cleanup better
+
+	close(c.done)
+	c.conn.Close()
+}
+
+func (c *Conn) writer() {
+
+	for {
+		select {
+		case <-c.done:
+			return
+		case b := <-c.write:
+			c.conn.Write(b)
+		}
+	}
+}
+
+func (c *Conn) reader() {
+
+	for {
+		select {
+		case <-c.done:
+			return
+		default:
+		}
+
+		var header [8]byte
+
+		// FIXME(dgryski): on failure, all future writes also fail until reconnect
+		// FIXME(dgryski): on failure,  we notify all pending requests that they'll get no response?
+		// FIXME(dgryski): need another timeout on these reads
+		io.ReadFull(c.conn, header[:])
+
+		rlen := binary.BigEndian.Uint16(header[2:])
+		id := binary.BigEndian.Uint32(header[4:])
+
+		response := make([]byte, (rlen + 8))
+		copy(response, header[:])
+
+		io.ReadFull(c.conn, response[8:])
+
+		c.mu.Lock()
+		ch := c.pending[id]
+		if ch != nil {
+			delete(c.pending, id)
+		}
+		c.mu.Unlock()
+
+		if ch != nil {
+			ch <- response
+		} else {
+			// message for unknown id
+		}
+	}
 }
 
 func (c *Conn) Ping(payload []byte) ([]Item, error) {
@@ -147,40 +222,26 @@ func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]Item, error) {
 
 func (c *Conn) doRequest(items []Item) ([]Item, error) {
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	id := atomic.AddUint32(&c.id, 1)
 
 	p := Packet{
 		VersionMaj: VersionMaj,
-		ID:         c.id,
+		ID:         id,
 		Items:      items,
 	}
-	c.id++
 
 	b, _ := Marshal(p)
 
-	_, err := c.conn.Write(b)
-	if err != nil {
-		return nil, err
-	}
+	ch := make(chan []byte, 1)
+	c.mu.Lock()
+	c.pending[id] = ch
+	c.mu.Unlock()
 
-	var header [8]byte
-
-	c.conn.Read(header[:])
-
-	rlen := binary.BigEndian.Uint16(header[2:])
-
-	response := make([]byte, (rlen + 8))
-	copy(response, header[:])
-
-	c.conn.Read(response[8:])
+	c.write <- b
+	b = <-ch
 
 	var r Packet
-	Unmarshal(response[:], &r)
-
-	if r.ID != p.ID {
-		return nil, errors.New("out of sequence response")
-	}
+	Unmarshal(b, &r)
 
 	if len(r.Items) > 0 && r.Items[len(r.Items)-1].Tag == TagPadding {
 		return r.Items[:len(r.Items)-1], nil

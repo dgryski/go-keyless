@@ -92,4 +92,22 @@ func main() {
 	if !bytes.Equal(sig, items[1].Data) {
 		log.Fatalln("signature mismatch")
 	}
+
+	// test pipelining
+	start := make(chan bool)
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			<-start
+			conn.Ping(nil)
+			done <- true
+		}()
+	}
+	close(start)
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
+
+	conn.Close()
 }
