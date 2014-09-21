@@ -14,6 +14,7 @@ import (
 	"github.com/dgryski/go-keyless"
 	"io/ioutil"
 	"log"
+	"net"
 	"strconv"
 )
 
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	for i := 0; i < 10; i++ {
-		r, err := conn.Ping([]byte("hello, world"))
+		r, err := conn.Ping(&keyless.Params{Payload: []byte("hello, world")})
 		fmt.Println(r, err)
 	}
 
@@ -76,7 +77,9 @@ func main() {
 
 	digest := keyless.DigestPublicModulus(&pkey.PublicKey)
 
-	plain, err := conn.Decrypt(digest[:], out)
+	netIP := net.ParseIP("8.8.8.8")
+
+	plain, err := conn.Decrypt(&keyless.Params{Digest: digest[:], Payload: out, ClientIP: netIP})
 
 	fmt.Printf("string(plain) %+v, err=%v\n", string(plain), err)
 
@@ -87,12 +90,12 @@ func main() {
 		log.Fatalln("unable to encrypt:", err)
 	}
 
-	remotesig, err := conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+	remotesig, err := conn.Sign(keyless.OpRSASignSHA256, &keyless.Params{Digest: digest[:], Payload: hashed[:]})
 	fmt.Println("signature match", bytes.Equal(sig, remotesig), "err=", err)
 
 	digest[0]++
 
-	remotesig, err = conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+	remotesig, err = conn.Sign(keyless.OpRSASignSHA256, &keyless.Params{Digest: digest[:], Payload: hashed[:]})
 	fmt.Println("expect failure: notfound err=", err)
 
 	// test pipelining

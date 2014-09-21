@@ -48,6 +48,13 @@ type Item struct {
 	Data []byte // The block of data to decrypt or sign
 }
 
+type Params struct {
+	Digest   []byte
+	SNI      string
+	ClientIP net.IP
+	Payload  []byte
+}
+
 // Number of bytes to pad responses to
 const padTo = 1024
 
@@ -243,14 +250,9 @@ FOR:
 
 var ErrBadResponse = errors.New("bad response packet")
 
-func (c *Conn) Ping(payload []byte) ([]byte, error) {
+func (c *Conn) Ping(params *Params) ([]byte, error) {
 
-	items := []Item{
-		{Tag: TagOPCODE, Data: []byte{OpPing}},
-		{Tag: TagPayload, Data: payload},
-	}
-
-	response, err := c.doRequest(items)
+	response, err := c.doRequest(OpPing, params)
 
 	if err != nil {
 		return nil, err
@@ -268,15 +270,9 @@ func (c *Conn) Ping(payload []byte) ([]byte, error) {
 	return response[1].Data, nil
 }
 
-func (c *Conn) Decrypt(digest, payload []byte) ([]byte, error) {
+func (c *Conn) Decrypt(params *Params) ([]byte, error) {
 
-	items := []Item{
-		{Tag: TagOPCODE, Data: []byte{OpRSADecrypt}},
-		{Tag: TagPayload, Data: payload},
-		{Tag: TagDigest, Data: digest},
-	}
-
-	response, err := c.doRequest(items)
+	response, err := c.doRequest(OpRSADecrypt, params)
 	if err != nil {
 		return nil, err
 	}
@@ -296,15 +292,9 @@ func (c *Conn) Decrypt(digest, payload []byte) ([]byte, error) {
 	return response[1].Data, nil
 }
 
-func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]byte, error) {
+func (c *Conn) Sign(op byte, params *Params) ([]byte, error) {
 
-	items := []Item{
-		{Tag: TagOPCODE, Data: []byte{op}},
-		{Tag: TagPayload, Data: payload},
-		{Tag: TagDigest, Data: digest},
-	}
-
-	response, err := c.doRequest(items)
+	response, err := c.doRequest(op, params)
 	if err != nil {
 		return nil, err
 	}
@@ -324,13 +314,37 @@ func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]byte, error) {
 	return response[1].Data, nil
 }
 
-func (c *Conn) doRequest(items []Item) ([]Item, error) {
+func (c *Conn) doRequest(op byte, params *Params) ([]Item, error) {
 
 	select {
 	case <-c.done:
 		return nil, io.EOF
 	default:
 
+	}
+
+	items := []Item{
+		{Tag: TagOPCODE, Data: []byte{op}},
+	}
+
+	if params != nil {
+		if params.Digest != nil {
+			items = append(items, Item{Tag: TagDigest, Data: params.Digest})
+		}
+		if params.Payload != nil {
+			items = append(items, Item{Tag: TagPayload, Data: params.Payload})
+		}
+		if params.SNI != "" {
+			items = append(items, Item{Tag: TagSNI, Data: []byte(params.SNI)})
+		}
+		if params.ClientIP != nil {
+			var ip []byte
+			ip = params.ClientIP.To4()
+			if ip == nil {
+				ip = params.ClientIP.To16()
+			}
+			items = append(items, Item{Tag: TagClientIP, Data: ip})
+		}
 	}
 
 	id := atomic.AddUint32(&c.id, 1)
