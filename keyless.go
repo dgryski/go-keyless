@@ -125,9 +125,14 @@ type Conn struct {
 	mu      sync.Mutex
 	pending map[uint32]chan []byte
 
+	// data to be written to the socket
 	write chan []byte
-	read  chan []byte
 
+	// these are signals *from* the reader and writer routines that they're not going to process anymore
+	doneRead  chan bool
+	doneWrite chan bool
+
+	// we have been asked to close
 	done chan bool
 
 	id uint32
@@ -145,8 +150,10 @@ func Dial(remote string, config *tls.Config) (*Conn, error) {
 	}
 
 	c.done = make(chan bool)
+	c.doneRead = make(chan bool)
+	c.doneWrite = make(chan bool)
+
 	c.pending = make(map[uint32]chan []byte)
-	c.read = make(chan []byte)
 	c.write = make(chan []byte)
 
 	go c.reader()
@@ -156,47 +163,65 @@ func Dial(remote string, config *tls.Config) (*Conn, error) {
 }
 
 func (c *Conn) Close() {
-	// FIXME(dgryski): we need to handle cleanup better
-
-	close(c.done)
-	c.conn.Close()
+	select {
+	case <-c.done:
+		// done channel already closed? Nothing to do
+		return
+	default:
+		// signal cleanup
+		close(c.done)
+		c.conn.Close()
+	}
 }
 
 func (c *Conn) writer() {
 
+FOR:
 	for {
 		select {
 		case <-c.done:
-			return
+			break FOR
 		case b := <-c.write:
-			c.conn.Write(b)
+			_, err := c.conn.Write(b)
+			if err != nil {
+				break FOR
+			}
 		}
 	}
+
+	close(c.doneWrite)
 }
 
 func (c *Conn) reader() {
 
+FOR:
 	for {
 		select {
 		case <-c.done:
-			return
+			break FOR
 		default:
 		}
 
 		var header [8]byte
 
-		// FIXME(dgryski): on failure, all future writes also fail until reconnect
-		// FIXME(dgryski): on failure,  we notify all pending requests that they'll get no response?
 		// FIXME(dgryski): need another timeout on these reads
-		io.ReadFull(c.conn, header[:])
+		_, err := io.ReadFull(c.conn, header[:])
+		if err != nil {
+			// partial read -- unknown connection state
+			break
+		}
 
 		rlen := binary.BigEndian.Uint16(header[2:])
 		id := binary.BigEndian.Uint32(header[4:])
 
-		response := make([]byte, (rlen + 8))
+		response := make([]byte, rlen+8)
 		copy(response, header[:])
 
-		io.ReadFull(c.conn, response[8:])
+		_, err = io.ReadFull(c.conn, response[8:])
+		if err != nil {
+			// partial read -- unknown connection state
+			break
+		}
 
 		c.mu.Lock()
 		ch := c.pending[id]
@@ -211,6 +236,9 @@ func (c *Conn) reader() {
 			// message for unknown id
 		}
 	}
+
+	// tell everybody waiting for a request that the reader isn't processing any more
+	close(c.doneRead)
 }
 
 var ErrBadResponse = errors.New("bad response packet")
@@ -298,6 +326,13 @@ func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]byte, error) {
 
 func (c *Conn) doRequest(items []Item) ([]Item, error) {
 
+	select {
+	case <-c.done:
+		return nil, io.EOF
+	default:
+
+	}
+
 	id := atomic.AddUint32(&c.id, 1)
 
 	p := Packet{
@@ -313,8 +348,17 @@ func (c *Conn) doRequest(items []Item) ([]Item, error) {
 	c.pending[id] = ch
 	c.mu.Unlock()
 
-	c.write <- b
-	b = <-ch
+	select {
+	case <-c.doneWrite:
+		return nil, io.EOF
+	case c.write <- b:
+	}
+
+	select {
+	case <-c.doneRead:
+		return nil, io.EOF
+	case b = <-ch:
+	}
 
 	var r Packet
 	Unmarshal(b, &r)
