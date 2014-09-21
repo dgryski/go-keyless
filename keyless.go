@@ -93,6 +93,32 @@ const (
 	ErrInternal                 = 0x08
 )
 
+func (e ErrCode) Error() string {
+
+	switch e {
+	case 0x00:
+		return "ErrNone"
+	case 0x01:
+		return "ErrCryptoFailed"
+	case 0x02:
+		return "ErrKeyNotFound"
+	case 0x03:
+		return "ErrRead"
+	case 0x04:
+		return "ErrVersionMismatch"
+	case 0x05:
+		return "ErrBadOpcode"
+	case 0x06:
+		return "ErrUnexpectedOpcode"
+	case 0x07:
+		return "ErrFormat"
+	case 0x08:
+		return "ErrInternal"
+	}
+
+	return "ErrUnknown"
+}
+
 type Conn struct {
 	conn net.Conn
 
@@ -187,18 +213,34 @@ func (c *Conn) reader() {
 	}
 }
 
-func (c *Conn) Ping(payload []byte) ([]Item, error) {
+var ErrBadResponse = errors.New("bad response packet")
+
+func (c *Conn) Ping(payload []byte) ([]byte, error) {
 
 	items := []Item{
 		{Tag: TagOPCODE, Data: []byte{OpPing}},
 		{Tag: TagPayload, Data: payload},
 	}
 
-	return c.doRequest(items)
+	response, err := c.doRequest(items)
 
+	if err != nil {
+		return nil, err
+	}
+
+	// probably shouldn't depend on the order of response packets..
+	if len(response) != 2 ||
+		response[0].Tag != TagOPCODE ||
+		len(response[0].Data) != 1 ||
+		response[0].Data[0] != OpPong ||
+		response[1].Tag != TagPayload {
+		return nil, ErrBadResponse
+	}
+
+	return response[1].Data, nil
 }
 
-func (c *Conn) Decrypt(digest, payload []byte) ([]Item, error) {
+func (c *Conn) Decrypt(digest, payload []byte) ([]byte, error) {
 
 	items := []Item{
 		{Tag: TagOPCODE, Data: []byte{OpRSADecrypt}},
@@ -206,10 +248,27 @@ func (c *Conn) Decrypt(digest, payload []byte) ([]Item, error) {
 		{Tag: TagDigest, Data: digest},
 	}
 
-	return c.doRequest(items)
+	response, err := c.doRequest(items)
+	if err != nil {
+		return nil, err
+	}
+
+	// probably shouldn't depend on the order of response packets..
+	if len(response) != 2 ||
+		response[0].Tag != TagOPCODE ||
+		len(response[0].Data) != 1 ||
+		response[1].Tag != TagPayload {
+		return nil, ErrBadResponse
+	}
+
+	if response[0].Data[0] == OpError {
+		return nil, ErrCode(response[1].Data[0])
+	}
+
+	return response[1].Data, nil
 }
 
-func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]Item, error) {
+func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]byte, error) {
 
 	items := []Item{
 		{Tag: TagOPCODE, Data: []byte{op}},
@@ -217,7 +276,24 @@ func (c *Conn) Sign(digest []byte, op byte, payload []byte) ([]Item, error) {
 		{Tag: TagDigest, Data: digest},
 	}
 
-	return c.doRequest(items)
+	response, err := c.doRequest(items)
+	if err != nil {
+		return nil, err
+	}
+
+	// probably shouldn't depend on the order of response packets..
+	if len(response) != 2 ||
+		response[0].Tag != TagOPCODE ||
+		len(response[0].Data) != 1 ||
+		response[1].Tag != TagPayload {
+		return nil, ErrBadResponse
+	}
+
+	if response[0].Data[0] == OpError {
+		return nil, ErrCode(response[1].Data[0])
+	}
+
+	return response[1].Data, nil
 }
 
 func (c *Conn) doRequest(items []Item) ([]Item, error) {
@@ -243,11 +319,13 @@ func (c *Conn) doRequest(items []Item) ([]Item, error) {
 	var r Packet
 	Unmarshal(b, &r)
 
-	if len(r.Items) > 0 && r.Items[len(r.Items)-1].Tag == TagPadding {
-		return r.Items[:len(r.Items)-1], nil
+	// docs say response is two items, plus padding.
+	// strip out the padding, complain if it's not there.
+	if len(r.Items) != 3 || r.Items[len(r.Items)-1].Tag != TagPadding {
+		return nil, ErrBadResponse
 	}
 
-	return r.Items, nil
+	return r.Items[:len(r.Items)-1], nil
 }
 
 func DigestPublicModulus(pub *rsa.PublicKey) [32]byte {

@@ -27,4 +27,3 @@ testclient$ go run main.go -server=localhost -port=2047 \
 
 TODO:
     - The client does not ship the SNI or the client IP address.
-    - The return values from API calls needs to be figured out

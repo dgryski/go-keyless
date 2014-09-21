@@ -54,8 +54,8 @@ func main() {
 	}
 
 	for i := 0; i < 10; i++ {
-		items, err := conn.Ping([]byte("hello, world"))
-		fmt.Println(items, err)
+		r, err := conn.Ping([]byte("hello, world"))
+		fmt.Println(r, err)
 	}
 
 	pkeyData, err := ioutil.ReadFile(*privateKey)
@@ -76,9 +76,9 @@ func main() {
 
 	digest := keyless.DigestPublicModulus(&pkey.PublicKey)
 
-	items, err := conn.Decrypt(digest[:], out)
+	plain, err := conn.Decrypt(digest[:], out)
 
-	fmt.Printf("string(items[1].Data) %+v\n", string(items[1].Data))
+	fmt.Printf("string(plain) %+v, err=%v\n", string(plain), err)
 
 	hashed := sha256.Sum256([]byte("hello, world"))
 
@@ -87,11 +87,10 @@ func main() {
 		log.Fatalln("unable to encrypt:", err)
 	}
 
-	items, err = conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+	digest[0]++
 
-	if !bytes.Equal(sig, items[1].Data) {
-		log.Fatalln("signature mismatch")
-	}
+	remotesig, err := conn.Sign(digest[:], keyless.OpRSASignSHA256, hashed[:])
+	fmt.Println("signature match", bytes.Equal(sig, remotesig), "err=", err)
 
 	// test pipelining
 	start := make(chan bool)
