@@ -1,6 +1,7 @@
 package keyless
 
 import (
+	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
@@ -86,6 +87,26 @@ const (
 	// Some error occurred, explanation is single byte in payload
 	OpError OpCode = 0xFF
 )
+
+func OpToHash(op OpCode) crypto.Hash {
+
+	switch op {
+	case OpRSASignMD5SHA1:
+		return crypto.MD5SHA1
+	case OpRSASignSHA1:
+		return crypto.SHA1
+	case OpRSASignSHA224:
+		return crypto.SHA224
+	case OpRSASignSHA256:
+		return crypto.SHA256
+	case OpRSASignSHA384:
+		return crypto.SHA384
+	case OpRSASignSHA512:
+		return crypto.SHA512
+	}
+
+	return 0
+}
 
 type ErrCode byte
 
