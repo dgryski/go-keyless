@@ -61,28 +61,30 @@ const padTo = 1024
 // A test message which will be echoed with its payload with the
 // operation changed to OP_PONG
 
+type OpCode byte
+
 // Possible values for KSSL_TAG_OPCODE
 const (
-	OpPing byte = 0xF1
-	OpPong      = 0xF2
+	OpPing OpCode = 0xF1
+	OpPong        = 0xF2
 
 	// Decrypt data encrypted using RSA with RSA_PKCS1_PADDING
-	OpRSADecrypt = 0x01
+	OpRSADecrypt OpCode = 0x01
 
 	// Sign data using RSA
-	OpRSASignMD5SHA1 = 0x02
-	OpRSASignSHA1    = 0x03
-	OpRSASignSHA224  = 0x04
-	OpRSASignSHA256  = 0x05
-	OpRSASignSHA384  = 0x06
-	OpRSASignSHA512  = 0x07
+	OpRSASignMD5SHA1 OpCode = 0x02
+	OpRSASignSHA1           = 0x03
+	OpRSASignSHA224         = 0x04
+	OpRSASignSHA256         = 0x05
+	OpRSASignSHA384         = 0x06
+	OpRSASignSHA512         = 0x07
 
 	// Used to send a block of data back to the client (in response, for
 	// example, to a KSSL_OP_RSA_DECRYPT)
-	OpResponse = 0xF0
+	OpResponse OpCode = 0xF0
 
 	// Some error occurred, explanation is single byte in payload
-	OpError = 0xFF
+	OpError OpCode = 0xFF
 )
 
 type ErrCode byte
@@ -301,14 +303,16 @@ func (c *Conn) Decrypt(params *Params) ([]byte, error) {
 		return nil, ErrBadResponse
 	}
 
-	if response[0].Data[0] == OpError {
+	if OpCode(response[0].Data[0]) == OpError {
 		return nil, ErrCode(response[1].Data[0])
 	}
 
 	return response[1].Data, nil
 }
 
-func (c *Conn) Sign(op byte, params *Params) ([]byte, error) {
+func (c *Conn) Sign(op OpCode, params *Params) ([]byte, error) {
+
+	// FIXME(dgryski): make sure opcode is a valid signature request type
 
 	response, err := c.doRequest(op, params)
 	if err != nil {
@@ -323,14 +327,14 @@ func (c *Conn) Sign(op byte, params *Params) ([]byte, error) {
 		return nil, ErrBadResponse
 	}
 
-	if response[0].Data[0] == OpError {
+	if OpCode(response[0].Data[0]) == OpError {
 		return nil, ErrCode(response[1].Data[0])
 	}
 
 	return response[1].Data, nil
 }
 
-func (c *Conn) doRequest(op byte, params *Params) ([]Item, error) {
+func (c *Conn) doRequest(op OpCode, params *Params) ([]Item, error) {
 
 	select {
 	case <-c.done:
@@ -340,7 +344,7 @@ func (c *Conn) doRequest(op byte, params *Params) ([]Item, error) {
 	}
 
 	items := []Item{
-		{Tag: TagOPCODE, Data: []byte{op}},
+		{Tag: TagOPCODE, Data: []byte{byte(op)}},
 	}
 
 	if params != nil {
