@@ -343,39 +343,9 @@ func (c *Conn) doRequest(op OpCode, params *Params) ([]Item, error) {
 
 	}
 
-	items := []Item{
-		{Tag: TagOPCODE, Data: []byte{byte(op)}},
-	}
-
-	if params != nil {
-		if params.Digest != nil {
-			items = append(items, Item{Tag: TagDigest, Data: params.Digest})
-		}
-		if params.Payload != nil {
-			items = append(items, Item{Tag: TagPayload, Data: params.Payload})
-		}
-		if params.SNI != "" {
-			items = append(items, Item{Tag: TagSNI, Data: []byte(params.SNI)})
-		}
-		if params.ClientIP != nil {
-			var ip []byte
-			ip = params.ClientIP.To4()
-			if ip == nil {
-				ip = params.ClientIP.To16()
-			}
-			items = append(items, Item{Tag: TagClientIP, Data: ip})
-		}
-	}
-
 	id := atomic.AddUint32(&c.id, 1)
 
-	p := Packet{
-		VersionMaj: VersionMaj,
-		ID:         id,
-		Items:      items,
-	}
-
-	b, _ := Marshal(p)
+	b := PackRequest(id, op, params)
 
 	ch := make(chan []byte, 1)
 	c.mu.Lock()
@@ -475,6 +445,78 @@ func Unmarshal(b []byte, p *Packet) error {
 	}
 
 	return nil
+}
+
+func PackRequest(id uint32, op OpCode, params *Params) []byte {
+
+	items := []Item{
+		{Tag: TagOPCODE, Data: []byte{byte(op)}},
+	}
+
+	if params != nil {
+		if params.Digest != nil {
+			items = append(items, Item{Tag: TagDigest, Data: params.Digest})
+		}
+		if params.Payload != nil {
+			items = append(items, Item{Tag: TagPayload, Data: params.Payload})
+		}
+		if params.SNI != "" {
+			items = append(items, Item{Tag: TagSNI, Data: []byte(params.SNI)})
+		}
+		if params.ClientIP != nil {
+			var ip []byte
+			ip = params.ClientIP.To4()
+			if ip == nil {
+				ip = params.ClientIP.To16()
+			}
+			items = append(items, Item{Tag: TagClientIP, Data: ip})
+		}
+	}
+
+	p := Packet{
+		VersionMaj: VersionMaj,
+		ID:         id,
+		Items:      items,
+	}
+
+	b, _ := Marshal(p)
+
+	return b
+}
+
+func UnpackRequest(b []byte) (*Packet, OpCode, *Params, error) {
+
+	var p Packet
+
+	err := Unmarshal(b, &p)
+
+	if err != nil {
+		return &p, 0, nil, err
+	}
+
+	var params Params
+	var op OpCode
+
+	for _, item := range p.Items {
+		switch item.Tag {
+		case TagOPCODE:
+			if len(item.Data) != 1 {
+				return nil, 0, nil, ErrCode(ErrBadOpcode)
+			}
+			op = OpCode(item.Data[0])
+		case TagDigest:
+			params.Digest = item.Data
+		case TagPayload:
+			params.Payload = item.Data
+		case TagSNI:
+			params.SNI = string(item.Data)
+		case TagClientIP:
+			params.ClientIP = item.Data
+
+		}
+	}
+
+	return &p, op, &params, nil
 }
 
 func append16(b []byte, v uint16) []byte {
