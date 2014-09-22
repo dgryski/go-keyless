@@ -56,14 +56,9 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 			conn.Write(b)
 
 		case keyless.OpRSADecrypt:
-			var digest [32]byte
-			if len(params.Digest) != 32 {
-				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
-				continue
-			}
-			copy(digest[:], params.Digest)
-			key, ok := keys[digest]
-			if !ok {
+
+			key := getPrivateKey(keys, params.Digest)
+			if key == nil {
 				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
 				continue
 			}
@@ -83,14 +78,9 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 			keyless.OpRSASignSHA256,
 			keyless.OpRSASignSHA384,
 			keyless.OpRSASignSHA512:
-			if len(params.Digest) != 32 {
-				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
-				continue
-			}
-			var digest [32]byte
-			copy(digest[:], params.Digest)
-			key, ok := keys[digest]
-			if !ok {
+
+			key := getPrivateKey(keys, params.Digest)
+			if key == nil {
 				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
 				continue
 			}
@@ -115,6 +105,15 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 func sendErrorResponse(conn io.ReadWriteCloser, p *keyless.Packet, errcode keyless.ErrCode) {
 	b := keyless.PackRequest(p.ID, keyless.OpError, &keyless.Params{Payload: []byte{byte(errcode)}})
 	conn.Write(b)
+}
+
+func getPrivateKey(keys map[[32]byte]*rsa.PrivateKey, paramDigest []byte) *rsa.PrivateKey {
+	var digest [32]byte
+	if len(paramDigest) != 32 {
+		return nil
+	}
+	copy(digest[:], paramDigest)
+	return keys[digest]
 }
 
 func main() {
