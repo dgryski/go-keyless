@@ -443,6 +443,10 @@ func Unmarshal(b []byte, p *Packet) error {
 
 	blen := len(b)
 
+	if blen < headerSize {
+		return ErrCode(ErrFormat)
+	}
+
 	p.VersionMaj, p.VersionMin = b[0], b[1]
 	b = b[2:]
 
@@ -450,7 +454,7 @@ func Unmarshal(b []byte, p *Packet) error {
 	b = b[2:]
 
 	if int(length)+headerSize != blen {
-		return errors.New("short packet")
+		return ErrCode(ErrFormat)
 	}
 
 	p.ID = binary.BigEndian.Uint32(b[:])
@@ -488,11 +492,19 @@ func appendItem(b []byte, item Item) []byte {
 
 func readItem(b []byte, item *Item) ([]byte, error) {
 
+	if len(b) < 3 {
+		return nil, ErrCode(ErrFormat)
+	}
+
 	item.Tag = Tag(b[0])
 	b = b[1:]
 
 	l := binary.BigEndian.Uint16(b[:])
 	b = b[2:]
+
+	if int(l) > len(b) {
+		return nil, ErrCode(ErrFormat)
+	}
 
 	item.Data, b = b[:l], b[l:]
 
