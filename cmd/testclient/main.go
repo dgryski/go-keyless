@@ -26,32 +26,43 @@ func main() {
 	caFile := flag.String("ca-file", "", "ca file")
 	server := flag.String("server", "", "server")
 	privateKey := flag.String("private-key", "", "server's private key")
+	useTLS := flag.Bool("tls", true, "use TLS")
 
 	flag.Parse()
 
-	cert, err := tls.LoadX509KeyPair(*clientCert, *clientKey)
-	if err != nil {
-		log.Fatalln("unable to load private key:", err)
-	}
+	var conn *keyless.Conn
 
-	caCert, err := ioutil.ReadFile(*caFile)
-	if err != nil {
-		log.Fatalln("unable to load CA:", err)
-	}
-
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(caCert)
-	if !ok {
-		log.Fatalln("failed to load CAs")
-	}
-
-	config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: roots, InsecureSkipVerify: true}
 	remote := *server + ":" + strconv.Itoa(*port)
 	log.Printf("remote %+v\n", remote)
-	conn, err := keyless.Dial(remote, &config)
 
-	if err != nil {
-		log.Fatalf("dial error: %s", err)
+	if *useTLS {
+		cert, err := tls.LoadX509KeyPair(*clientCert, *clientKey)
+		if err != nil {
+			log.Fatalln("unable to load private key:", err)
+		}
+
+		caCert, err := ioutil.ReadFile(*caFile)
+		if err != nil {
+			log.Fatalln("unable to load CA:", err)
+		}
+
+		roots := x509.NewCertPool()
+		ok := roots.AppendCertsFromPEM(caCert)
+		if !ok {
+			log.Fatalln("failed to load CAs")
+		}
+
+		config := tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: roots, InsecureSkipVerify: true}
+		conn, err = keyless.DialTLS(remote, &config)
+		if err != nil {
+			log.Fatalf("dial error: %s", err)
+		}
+	} else {
+		var err error
+		conn, err = keyless.Dial(remote)
+		if err != nil {
+			log.Fatalf("dial error: %s", err)
+		}
 	}
 
 	for i := 0; i < 10; i++ {

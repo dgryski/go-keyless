@@ -145,28 +145,44 @@ type Conn struct {
 	id uint32
 }
 
-func Dial(remote string, config *tls.Config) (*Conn, error) {
+func Dial(remote string) (*Conn, error) {
 
-	var c Conn
-
-	var err error
-	c.conn, err = tls.Dial("tcp", remote, config)
-
+	c, err := net.Dial("tcp", remote)
 	if err != nil {
 		return nil, err
 	}
 
-	c.done = make(chan bool)
-	c.doneRead = make(chan bool)
-	c.doneWrite = make(chan bool)
+	return NewWithConn(c), nil
 
-	c.pending = make(map[uint32]chan []byte)
-	c.write = make(chan []byte)
+}
+
+func DialTLS(remote string, config *tls.Config) (*Conn, error) {
+
+	c, err := tls.Dial("tcp", remote, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewWithConn(c), nil
+
+}
+
+func NewWithConn(conn net.Conn) *Conn {
+
+	c := Conn{
+		conn:      conn,
+		done:      make(chan bool),
+		doneRead:  make(chan bool),
+		doneWrite: make(chan bool),
+
+		pending: make(map[uint32]chan []byte),
+		write:   make(chan []byte),
+	}
 
 	go c.reader()
 	go c.writer()
 
-	return &c, nil
+	return &c
 }
 
 func (c *Conn) Close() {
