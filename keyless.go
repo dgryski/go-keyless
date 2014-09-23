@@ -8,7 +8,9 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -106,6 +108,37 @@ func OpToHash(op OpCode) crypto.Hash {
 	}
 
 	return 0
+}
+
+func (op OpCode) String() string {
+
+	switch op {
+
+	case OpPing:
+		return "Ping"
+	case OpPong:
+		return "Pong"
+	case OpRSADecrypt:
+		return "RSA decrypt payload"
+	case OpRSASignMD5SHA1:
+		return "RSA sign MD5SHA1"
+	case OpRSASignSHA1:
+		return "RSA sign SHA1"
+	case OpRSASignSHA224:
+		return "RSA sign SHA224"
+	case OpRSASignSHA256:
+		return "RSA sign SHA256"
+	case OpRSASignSHA384:
+		return "RSA sign SHA384"
+	case OpRSASignSHA512:
+		return "RSA sign SHA512"
+	case OpResponse:
+		return "response"
+	case OpError:
+		return "error"
+	}
+
+	return fmt.Sprintf("bad opcode %x", byte(op))
 }
 
 type ErrCode byte
@@ -453,6 +486,7 @@ func Unmarshal(b []byte, p *Packet) error {
 	}
 
 	p.ID = binary.BigEndian.Uint32(b[:])
+	log.Printf("p.ID %+v\n", p.ID)
 	b = b[4:]
 
 	for len(b) > 0 {

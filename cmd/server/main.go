@@ -50,7 +50,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 		// FIXME(dgryski): need another timeout on these reads
 		_, err := io.ReadFull(conn, header[:])
 		if err != nil {
-			log.Println("error  reading header:", err)
+			log.Println("error reading header:", err)
 
 			// partial read -- unknown connection state
 			break
@@ -70,8 +70,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 		p, op, params, err := keyless.UnpackRequest(response)
 		if err != nil {
-			log.Println("error unpacking request: ", err)
-			writeErrorResponse(conn, p, err.(keyless.ErrCode))
+			writeErrorResponse(conn, p, op, err.(keyless.ErrCode), err, params)
 			continue
 		}
 
@@ -88,15 +87,13 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
-					log.Printf("key not found: %x", params.Digest)
-					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					writeErrorResponse(lwriter, p, op, keyless.ErrKeyNotFound, nil, params)
 					return
 				}
 
 				out, err := rsa.DecryptPKCS1v15(rand.Reader, key, params.Payload)
 				if err != nil {
-					log.Println("RSA decryption failed: ", err)
-					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					writeErrorResponse(lwriter, p, op, keyless.ErrCryptoFailed, err, params)
 					return
 				}
 
@@ -115,8 +112,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
-					log.Printf("key not found: %x", params.Digest)
-					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					writeErrorResponse(lwriter, p, op, keyless.ErrKeyNotFound, err, params)
 					return
 				}
 
@@ -124,8 +120,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				out, err := rsa.SignPKCS1v15(rand.Reader, key, h, params.Payload)
 				if err != nil {
-					log.Println("RSA sign failed:", err)
-					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					writeErrorResponse(lwriter, p, op, keyless.ErrCryptoFailed, err, params)
 					return
 				}
 
@@ -134,12 +129,13 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 			}()
 
 		default:
-			writeErrorResponse(lwriter, p, keyless.ErrBadOpcode)
+			writeErrorResponse(lwriter, p, op, keyless.ErrBadOpcode, nil, params)
 		}
 	}
 }
 
-func writeErrorResponse(conn io.Writer, p *keyless.Packet, errcode keyless.ErrCode) (int, error) {
+func writeErrorResponse(conn io.Writer, p *keyless.Packet, op keyless.OpCode, errcode keyless.ErrCode, err error, params *keyless.Params) (int, error) {
+	log.Printf("%s: %08x: %s: %x: %s: %v", params.ClientIP, p.ID, op, params.Digest, errcode, err)
 	b := keyless.PackRequest(p.ID, keyless.OpError, &keyless.Params{Payload: []byte{byte(errcode)}})
 	return conn.Write(b)
 }
@@ -169,7 +165,6 @@ func main() {
 
 	// load all private keys
 	filepath.Walk(*keydir, func(path string, info os.FileInfo, err error) error {
-		log.Println("walking", path)
 
 		if err != nil {
 			return err
@@ -194,6 +189,8 @@ func main() {
 
 		digest := keyless.DigestPublicModulus(&pkey.PublicKey)
 		keys[digest] = pkey
+
+		log.Printf("loaded %s: %x", path, digest)
 
 		return nil
 	})
