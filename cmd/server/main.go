@@ -133,12 +133,13 @@ func main() {
 	// load all private keys
 	filepath.Walk(*keydir, func(path string, info os.FileInfo, err error) error {
 		log.Println("walking", path)
-		if info.IsDir() {
-			return nil
-		}
 
 		if err != nil {
 			return err
+		}
+
+		if info.IsDir() {
+			return nil
 		}
 
 		pkeyData, err := ioutil.ReadFile(path)
