@@ -61,7 +61,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 		p, op, params, err := keyless.UnpackRequest(response)
 		if err != nil {
-			sendErrorResponse(conn, p, err.(keyless.ErrCode))
+			writeErrorResponse(conn, p, err.(keyless.ErrCode))
 			continue
 		}
 
@@ -78,13 +78,13 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
-					sendErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
 					return
 				}
 
 				out, err := rsa.DecryptPKCS1v15(rand.Reader, key, params.Payload)
 				if err != nil {
-					sendErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
 					return
 				}
 
@@ -103,7 +103,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
-					sendErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
 					return
 				}
 
@@ -111,7 +111,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				out, err := rsa.SignPKCS1v15(rand.Reader, key, h, params.Payload)
 				if err != nil {
-					sendErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
 					return
 				}
 
@@ -120,14 +120,14 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 			}()
 
 		default:
-			sendErrorResponse(lwriter, p, keyless.ErrBadOpcode)
+			writeErrorResponse(lwriter, p, keyless.ErrBadOpcode)
 		}
 	}
 }
 
-func sendErrorResponse(conn io.Writer, p *keyless.Packet, errcode keyless.ErrCode) {
+func writeErrorResponse(conn io.Writer, p *keyless.Packet, errcode keyless.ErrCode) (int, error) {
 	b := keyless.PackRequest(p.ID, keyless.OpError, &keyless.Params{Payload: []byte{byte(errcode)}})
-	conn.Write(b)
+	return conn.Write(b)
 }
 
 func getPrivateKey(keys map[[32]byte]*rsa.PrivateKey, paramDigest []byte) *rsa.PrivateKey {
