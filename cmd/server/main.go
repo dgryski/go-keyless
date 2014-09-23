@@ -20,22 +20,28 @@ import (
 )
 
 type lockedWriter struct {
-	io.Writer
+	io.WriteCloser
 	sync.Mutex
+	Err error
 }
 
 func (l *lockedWriter) Write(b []byte) (int, error) {
 	l.Lock()
-	n, e := l.Writer.Write(b)
+	n, e := l.WriteCloser.Write(b)
+	if e != nil {
+		if l.Err == nil {
+			l.Err = e
+		}
+
+		l.Close()
+	}
 	l.Unlock()
 	return n, e
 }
 
 func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) {
 
-	lwriter := &lockedWriter{Writer: conn}
-
-	defer conn.Close()
+	lwriter := &lockedWriter{WriteCloser: conn}
 
 	for {
 
