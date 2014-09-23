@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -486,7 +485,6 @@ func Unmarshal(b []byte, p *Packet) error {
 	}
 
 	p.ID = binary.BigEndian.Uint32(b[:])
-	log.Printf("p.ID %+v\n", p.ID)
 	b = b[4:]
 
 	for len(b) > 0 {
