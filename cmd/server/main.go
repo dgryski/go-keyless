@@ -14,11 +14,26 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"github.com/dgryski/go-keyless"
 )
 
+type lockedWriter struct {
+	io.Writer
+	sync.Mutex
+}
+
+func (l *lockedWriter) Write(b []byte) (int, error) {
+	l.Lock()
+	n, e := l.Writer.Write(b)
+	l.Unlock()
+	return n, e
+}
+
 func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) {
+
+	lwriter := &lockedWriter{Writer: conn}
 
 	defer conn.Close()
 
@@ -52,25 +67,30 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 		switch op {
 		case keyless.OpPing:
-			b := keyless.PackRequest(p.ID, keyless.OpPong, params)
-			conn.Write(b)
+			go func() {
+				b := keyless.PackRequest(p.ID, keyless.OpPong, params)
+				lwriter.Write(b)
+			}()
 
 		case keyless.OpRSADecrypt:
 
-			key := getPrivateKey(keys, params.Digest)
-			if key == nil {
-				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
-				continue
-			}
+			go func() {
 
-			out, err := rsa.DecryptPKCS1v15(rand.Reader, key, params.Payload)
-			if err != nil {
-				sendErrorResponse(conn, p, keyless.ErrCryptoFailed)
-				continue
-			}
+				key := getPrivateKey(keys, params.Digest)
+				if key == nil {
+					sendErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					return
+				}
 
-			b := keyless.PackRequest(p.ID, keyless.OpResponse, &keyless.Params{Payload: out})
-			conn.Write(b)
+				out, err := rsa.DecryptPKCS1v15(rand.Reader, key, params.Payload)
+				if err != nil {
+					sendErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					return
+				}
+
+				b := keyless.PackRequest(p.ID, keyless.OpResponse, &keyless.Params{Payload: out})
+				lwriter.Write(b)
+			}()
 
 		case keyless.OpRSASignMD5SHA1,
 			keyless.OpRSASignSHA1,
@@ -79,30 +99,33 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 			keyless.OpRSASignSHA384,
 			keyless.OpRSASignSHA512:
 
-			key := getPrivateKey(keys, params.Digest)
-			if key == nil {
-				sendErrorResponse(conn, p, keyless.ErrKeyNotFound)
-				continue
-			}
+			go func() {
 
-			h := keyless.OpToHash(op)
+				key := getPrivateKey(keys, params.Digest)
+				if key == nil {
+					sendErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
+					return
+				}
 
-			out, err := rsa.SignPKCS1v15(rand.Reader, key, h, params.Payload)
-			if err != nil {
-				sendErrorResponse(conn, p, keyless.ErrCryptoFailed)
-				continue
-			}
+				h := keyless.OpToHash(op)
 
-			b := keyless.PackRequest(p.ID, keyless.OpResponse, &keyless.Params{Payload: out})
-			conn.Write(b)
+				out, err := rsa.SignPKCS1v15(rand.Reader, key, h, params.Payload)
+				if err != nil {
+					sendErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
+					return
+				}
+
+				b := keyless.PackRequest(p.ID, keyless.OpResponse, &keyless.Params{Payload: out})
+				lwriter.Write(b)
+			}()
 
 		default:
-			sendErrorResponse(conn, p, keyless.ErrBadOpcode)
+			sendErrorResponse(lwriter, p, keyless.ErrBadOpcode)
 		}
 	}
 }
 
-func sendErrorResponse(conn io.ReadWriteCloser, p *keyless.Packet, errcode keyless.ErrCode) {
+func sendErrorResponse(conn io.Writer, p *keyless.Packet, errcode keyless.ErrCode) {
 	b := keyless.PackRequest(p.ID, keyless.OpError, &keyless.Params{Payload: []byte{byte(errcode)}})
 	conn.Write(b)
 }
