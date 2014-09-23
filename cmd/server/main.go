@@ -50,6 +50,8 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 		// FIXME(dgryski): need another timeout on these reads
 		_, err := io.ReadFull(conn, header[:])
 		if err != nil {
+			log.Println("error  reading header:", err)
+
 			// partial read -- unknown connection state
 			break
 		}
@@ -61,12 +63,14 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 		_, err = io.ReadFull(conn, response[8:])
 		if err != nil {
+			log.Println("error reading body:", err)
 			// partial read -- unknown connection state
 			break
 		}
 
 		p, op, params, err := keyless.UnpackRequest(response)
 		if err != nil {
+			log.Println("error unpacking request: ", err)
 			writeErrorResponse(conn, p, err.(keyless.ErrCode))
 			continue
 		}
@@ -84,12 +88,14 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
+					log.Printf("key not found: %x", params.Digest)
 					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
 					return
 				}
 
 				out, err := rsa.DecryptPKCS1v15(rand.Reader, key, params.Payload)
 				if err != nil {
+					log.Println("RSA decryption failed: ", err)
 					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
 					return
 				}
@@ -109,6 +115,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				key := getPrivateKey(keys, params.Digest)
 				if key == nil {
+					log.Printf("key not found: %x", params.Digest)
 					writeErrorResponse(lwriter, p, keyless.ErrKeyNotFound)
 					return
 				}
@@ -117,6 +124,7 @@ func handleRequests(conn io.ReadWriteCloser, keys map[[32]byte]*rsa.PrivateKey) 
 
 				out, err := rsa.SignPKCS1v15(rand.Reader, key, h, params.Payload)
 				if err != nil {
+					log.Println("RSA sign failed:", err)
 					writeErrorResponse(lwriter, p, keyless.ErrCryptoFailed)
 					return
 				}
