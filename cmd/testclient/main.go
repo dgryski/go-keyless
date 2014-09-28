@@ -106,7 +106,7 @@ func main() {
 
 	digest[0]++
 
-	remotesig, err = conn.Sign(keyless.OpRSASignSHA256, &keyless.Params{Digest: digest[:], Payload: hashed[:]})
+	remotesig, err = conn.Sign(keyless.OpRSASignSHA256, &keyless.Params{Digest: digest[:], Payload: hashed[:], ClientIP: netIP})
 	fmt.Println("expect failure: notfound err=", err)
 
 	// test pipelining
