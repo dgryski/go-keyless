@@ -26,7 +26,3 @@ testclient$ go run main.go -server=localhost -port=2047 \
     -private-key=$KEYLESS/testing/keys/private.key
 
 There's also a sample server included in cmd/server.
-
-TODO:
-   - server should handle requests in parallel
-   - server needs better error handling / logging
